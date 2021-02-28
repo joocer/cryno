@@ -1,2 +1,2 @@
 # cryno
-data summarizer
+data profiling
