@@ -31,8 +31,9 @@ def read_jsonl(filename, limit=-1, chunk_size=32*1024*1024, delimiter="\n"):
         except StopIteration:
             return
 
-schema = Schema('twitter.schema')
-data = list(read_jsonl("twitter.jsonl"))
+f = 'netflix_titles'
+schema = Schema(F"{f}.schema")
+data = list(read_jsonl(F"{f}.jsonl"))
 
 def get_type(validators):
 
@@ -49,27 +50,30 @@ def get_type(validators):
         return "numeric"
     if val in ['is_string', 'is_cve']:
         return "string"
-    if val in ['is_enum', 'is_boolean']:
+    if val in ['is_valid_enum', 'is_boolean']:
         return "enum"
     if val in ['is_date']:
         return "date"
 
     return "other"
 
-bar_chars = (' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█')
 
 def _draw_histogram(bins):
+    BAR_CHARS = (' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█')
+
     mx = max([v for k,v in bins.items()])
-    bar_height = (mx / 8)
     if mx == 0:
         return ' ' * len(bins)
     
-    histogram = ''
+    bar_height = (mx / 7)
+    bars = []
     for k,v in bins.items():
-        height = int(v / bar_height)
-        histogram += bar_chars[height]
+        if v == 0:
+            bars.append(" ")
+        height = int(v / bar_height) + 1
+        bars.append(BAR_CHARS[height])
         
-    return histogram
+    return ''.join(bars)
 
 def _redistribute_bins(bins, number_of_bins=100):
     
@@ -126,6 +130,8 @@ for i, row in enumerate(data):
             field_summary['nulls'] += 1
 
         elif field_type == 'numeric':
+            field_value = float(field_value)
+
             if field_summary.get('max', field_value) <= field_value:
                 field_summary['max'] = field_value
             if field_summary.get('min', field_value) >= field_value:
@@ -144,41 +150,48 @@ for i, row in enumerate(data):
             if not binned:
                 field_summary['bins'][(field_value, field_value)] = 1
                 
-            if len(field_summary['bins']) > 500:
-                field_summary['bins'] = _redistribute_bins(field_summary['bins'], 50)
+            if len(field_summary['bins']) > 1000:
+                field_summary['bins'] = _redistribute_bins(field_summary['bins'], 100)
                 
         elif field_type == 'date':
             # convert to epoch seconds
             from dateutil import parser
-            field_value = int(parser.parse(field_value).timestamp())
+            if len(field_value.strip()) == 0:
+                field_summary['nulls'] += 1
+            else:
+                field_value = int(parser.parse(field_value).timestamp())
             
-            if field_summary.get('max', field_value) <= field_value:
-                field_summary['max'] = field_value
-            if field_summary.get('min', field_value) >= field_value:
-                field_summary['min'] = field_value
-                
-            if field_summary.get('bins') is None:
-                field_summary['bins'] = {}
-            binned = False
-            for bounds in field_summary['bins']:
-                bottom, top = bounds
-                if field_value >= bottom and field_value <= top:
-                    field_summary['bins'][bounds] += 1
-                    binned = True
-            if not binned:
-                field_summary['bins'][(field_value, field_value)] = 1
-                
-            if len(field_summary['bins']) > 500:
-                field_summary['bins'] = _redistribute_bins(field_summary['bins'], 50)
+                if field_summary.get('max', field_value) <= field_value:
+                    field_summary['max'] = field_value
+                if field_summary.get('min', field_value) >= field_value:
+                    field_summary['min'] = field_value
+                    
+                if field_summary.get('bins') is None:
+                    field_summary['bins'] = {}
+                binned = False
+                for bounds in field_summary['bins']:
+                    bottom, top = bounds
+                    if field_value >= bottom and field_value <= top:
+                        field_summary['bins'][bounds] += 1
+                        binned = True
+                if not binned:
+                    field_summary['bins'][(field_value, field_value)] = 1
+                    
+                if len(field_summary['bins']) > 1000:
+                    field_summary['bins'] = _redistribute_bins(field_summary['bins'], 100)
 
         elif field_type == 'string':
-            if field_summary.get('max_length', len(field_value)) <= len(field_value):
-                field_summary['max_length'] = len(field_value)
-            if field_summary.get('unique_value_list') is None:
-                field_summary['unique_value_list'] = {hash(field_value)}
-            elif len(field_summary['unique_value_list']) < MAXIMUM_UNIQUE_VALUES:
-                field_summary['unique_value_list'].add(hash(field_value))
-            field_summary['unique_values'] = len(field_summary['unique_value_list'])
+
+            if len(field_value.strip()) == 0:
+                field_summary['nulls'] += 1
+            else:
+                if field_summary.get('max_length', len(field_value)) <= len(field_value):
+                    field_summary['max_length'] = len(field_value)
+                if field_summary.get('unique_value_list') is None:
+                    field_summary['unique_value_list'] = {hash(field_value)}
+                elif len(field_summary['unique_value_list']) < MAXIMUM_UNIQUE_VALUES:
+                    field_summary['unique_value_list'].add(hash(field_value))
+                field_summary['unique_values'] = len(field_summary['unique_value_list'])
 
         elif field_type == 'enum':
             if field_summary.get('values') is None:
@@ -213,10 +226,10 @@ def enum_summary(dic):
     for index, item in enumerate(s):
         if index == 2:
             break
-        result += F"`{item}`: {(s[item] / cumsum):.1%} "
+        result += F"`{item}`: {(s[item] / cumsum):.0%} "
         eliminated += s[item]
     if eliminated < cumsum:
-        result += F"[other]: {(cumsum - eliminated) / cumsum:.1%}"
+        result += F"`other`: {(cumsum - eliminated) / cumsum:.0%}"
     return result
 
 def human_format(num):
