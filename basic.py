@@ -32,6 +32,7 @@ def read_jsonl(filename, limit=-1, chunk_size=32*1024*1024, delimiter="\n"):
             return
 
 f = 'netflix_titles'
+#f = 'twitter'
 schema = Schema(F"{f}.schema")
 data = list(read_jsonl(F"{f}.jsonl"))
 
