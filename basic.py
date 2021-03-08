@@ -1,3 +1,6 @@
+"""
+This is a tactical implementation to learn and test techniques.
+"""
 import orjson as json
 from validator import *
 
@@ -74,7 +77,7 @@ def _draw_histogram(bins):
         height = int(v / bar_height) + 1
         bars.append(BAR_CHARS[height])
         
-    return ''.join(bars)
+    return "[hist] >" + ''.join(bars) + "<"
 
 def _redistribute_bins(bins, number_of_bins=100):
     
@@ -223,14 +226,14 @@ def enum_summary(dic):
     s = {k:v for k,v in sorted(dic.items(), key=lambda item: item[1], reverse=True)}
     cumsum = sum([v for k,v in dic.items()])
     eliminated = 0
-    result = ''
+    result = '[vals] '
     for index, item in enumerate(s):
         if index == 2:
             break
         result += F"`{item}`: {(s[item] / cumsum):.0%} "
         eliminated += s[item]
     if eliminated < cumsum:
-        result += F"`other`: {(cumsum - eliminated) / cumsum:.0%}"
+        result += F"`other` ({cumsum - eliminated}): {(cumsum - eliminated) / cumsum:.0%}"
     return result
 
 def human_format(num):
@@ -243,16 +246,22 @@ def human_format(num):
         return str(num)
     return '{}{}'.format('{:1f}'.format(display).rstrip('0').rstrip('.'), ['', 'K', 'M', 'B', 'T', 'P', 'E', 'Z', 'Y', 'Br'][magnitude])
 
+def empty_summary(nulls, items):
+    if nulls > 0:
+        return F" [empty] {(nulls / items):.1%}"
+    else:
+        return ""
+
 
 for field in summary:
     field_summary = summary[field]
     if field_summary['type'] == 'numeric':
-        print(F"[num] {field:20} [count] {field_summary['items']} [empty] {(field_summary['nulls'] / field_summary['items']):.1%} [range] {human_format(field_summary['min'])} to {human_format(field_summary['max'])} [mean] {field_summary['mean']:.2} >{_draw_histogram(field_summary['bins'])}<") 
+        print(F"[num] {field:20} [count] {field_summary['items']}{empty_summary(field_summary['nulls'], field_summary['items'])} [range] {human_format(field_summary['min'])} to {human_format(field_summary['max'])} [mean] {field_summary['mean']:.2} {_draw_histogram(field_summary['bins'])}") 
     if field_summary['type'] == 'date':
-        print(F"[num] {field:20} [count] {field_summary['items']} [empty] {(field_summary['nulls'] / field_summary['items']):.1%} [range] {field_summary['min']} to {field_summary['max']} >{_draw_histogram(field_summary['bins'])}<") 
+        print(F"[num] {field:20} [count] {field_summary['items']}{empty_summary(field_summary['nulls'], field_summary['items'])} [range] {field_summary['min']} to {field_summary['max']} {_draw_histogram(field_summary['bins'])}") 
     if field_summary['type'] == 'other':
-        print(F"[oth] {field:20} [count] {field_summary['items']} [empty] {(field_summary['nulls'] / field_summary['items']):.1%}")
+        print(F"[oth] {field:20} [count] {field_summary['items']}{empty_summary(field_summary['nulls'], field_summary['items'])}")
     if field_summary['type'] == 'string':
-        print(F"[str] {field:20} [count] {field_summary['items']} [empty] {(field_summary['nulls'] / field_summary['items']):.1%} [unique] {field_summary['unique_values']}")
+        print(F"[str] {field:20} [count] {field_summary['items']}{empty_summary(field_summary['nulls'], field_summary['items'])} [unique] {field_summary['unique_values']}")
     if field_summary['type'] == 'enum':
-        print(F"[enm] {field:20} [count] {field_summary['items']} [empty] {(field_summary['nulls'] / field_summary['items']):.1%} {enum_summary(field_summary['values'])}" )
+        print(F"[enm] {field:20} [count] {field_summary['items']}{empty_summary(field_summary['nulls'], field_summary['items'])} {enum_summary(field_summary['values'])}" )
